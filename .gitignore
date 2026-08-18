@@ -1,0 +1,26 @@
+node_modules
+dist
+.output
+.vercel
+.tanstack
+.nitro
+.wrangler
+*.local
+.env
+.env.*
+!.env.example
+.DS_Store
+screenshots
+attachments
+artifacts
+.grok
+.node_modules.lock
+
+# Ultramock-sourced device packs — not part of this project
+public/models
+public/icon.png
+public/icon-ref.png
+public/og-ref.jpg
+scripts/scrape-um.mjs
+scripts/test-editor.mjs
+scripts/test-editor2.mjs

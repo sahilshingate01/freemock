@@ -1,0 +1,79 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --color-studio: #e0e0e0;
+  --color-studio-ink: #000000;
+  --color-panel: #fafafa;
+  --color-panel-ink: #09090b;
+  --color-chrome: #ffffff;
+  --color-chrome-ink: #0e0e10;
+  --color-fg: #18181b;
+  --color-fg-on-ink: #f4f4f5;
+  --color-muted: #71717a;
+  --color-muted-on-ink: #a1a1aa;
+  --color-line: rgb(0 0 0 / 0.15);
+  --color-line-ink: rgb(255 255 255 / 0.1);
+  --color-accent: #18181b;
+  --color-accent-fg: #fafafa;
+  --color-danger: #dc2626;
+
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+
+  --font-sans: "Geist", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --shadow-chrome: 0 1px 2px rgb(0 0 0 / 0.04), 0 8px 24px rgb(0 0 0 / 0.04);
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  html,
+  body,
+  #app {
+    min-height: 100%;
+  }
+
+  body {
+    margin: 0;
+    font-family: var(--font-sans);
+    background: var(--color-studio);
+    color: var(--color-fg);
+  }
+
+  .dark body {
+    background: var(--color-studio-ink);
+    color: var(--color-fg-on-ink);
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
