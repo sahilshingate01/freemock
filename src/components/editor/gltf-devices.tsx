@@ -69,9 +69,51 @@ export function peekResolved(url: string) {
 }
 
 function isScreenMaterial(mat: THREE.Material): boolean {
+  if (mat.userData.isScreen) return true;
   if (!("emissive" in mat)) return false;
   const em = (mat as THREE.MeshStandardMaterial).emissive;
-  return em.r > 0.85 && em.g > 0.85 && em.b > 0.85;
+  return (em.r + em.g + em.b) / 3 > 0.85;
+}
+
+function screenMap(map: THREE.Texture | null) {
+  if (!map) return null;
+  const t = map.clone();
+  t.flipY = false;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.needsUpdate = true;
+  return t;
+}
+
+function applyScreen(root: THREE.Object3D, map: THREE.Texture | null) {
+  const tex = screenMap(map);
+  root.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const list = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    const hit = list.some((m) => m && isScreenMaterial(m));
+    if (!hit && !mesh.userData.isScreen) return;
+    mesh.userData.isScreen = true;
+    const src = (list.find((m) => m && isScreenMaterial(m)) ?? list[0]) as
+      | THREE.MeshStandardMaterial
+      | undefined;
+    if (!src) return;
+    if (!src.userData.screenBase) {
+      src.userData.screenBase = true;
+      src.userData.isScreen = true;
+    }
+    src.color.set("#ffffff");
+    src.map = tex;
+    src.emissive = new THREE.Color("#ffffff");
+    src.emissiveMap = tex;
+    src.emissiveIntensity = tex ? 1 : 0.08;
+    src.metalness = 0;
+    src.roughness = 0.22;
+    src.transparent = false;
+    src.opacity = 1;
+    src.toneMapped = false;
+    src.needsUpdate = true;
+    mesh.material = src;
+  });
 }
 
 function texturesReady(root: THREE.Object3D) {
@@ -82,14 +124,8 @@ function texturesReady(root: THREE.Object3D) {
     const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     for (const mat of mats) {
       const std = mat as THREE.MeshStandardMaterial;
-      for (const tex of [
-        std.map,
-        std.normalMap,
-        std.roughnessMap,
-        std.metalnessMap,
-        std.emissiveMap,
-      ]) {
-        if (!tex) continue;
+      for (const tex of [std.map, std.normalMap, std.roughnessMap, std.metalnessMap]) {
+        if (!tex || mesh.userData.isScreen) continue;
         const img = tex.image as { width?: number } | undefined;
         if (!img || !img.width) pending += 1;
       }
@@ -98,38 +134,18 @@ function texturesReady(root: THREE.Object3D) {
   return pending === 0;
 }
 
-function applyScreen(root: THREE.Object3D, map: THREE.Texture | null) {
-  root.traverse((obj) => {
-    const mesh = obj as THREE.Mesh;
-    if (!mesh.isMesh) return;
-    const list = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-    const next = list.map((mat) => {
-      if (!isScreenMaterial(mat)) return mat;
-      const m = mat.clone() as THREE.MeshStandardMaterial;
-      m.map = map;
-      m.emissiveMap = map;
-      m.emissive = new THREE.Color(map ? "#ffffff" : "#111111");
-      m.emissiveIntensity = map ? 0.9 : 0.12;
-      m.toneMapped = false;
-      m.needsUpdate = true;
-      return m;
-    });
-    mesh.material = Array.isArray(mesh.material) ? next : next[0]!;
-  });
-}
-
 function tintBody(root: THREE.Object3D, color: string) {
   const c = new THREE.Color(color);
   root.traverse((obj) => {
     const mesh = obj as THREE.Mesh;
-    if (!mesh.isMesh) return;
+    if (!mesh.isMesh || mesh.userData.isScreen) return;
     const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     for (const mat of mats) {
-      if (isScreenMaterial(mat)) continue;
       if (!("color" in mat)) continue;
       const m = mat as THREE.MeshStandardMaterial;
+      if (m.map || m.userData.isScreen) continue;
       const lum = (m.color.r + m.color.g + m.color.b) / 3;
-      if (lum > 0.25 && lum < 0.92) m.color.lerp(c, 0.45);
+      if (lum > 0.25 && lum < 0.92) m.color.lerp(c, 0.35);
     }
   });
 }
@@ -179,30 +195,28 @@ export function GltfDevice({
   readyRef.current = onReady;
 
   useEffect(() => {
+    useEditor.getState().setFirstDeviceReady(false);
     if (clone) return;
     let cancelled = false;
-    let settled = false;
-    const timer = window.setTimeout(() => {
-      if (!cancelled && !settled) {
-        readyRef.current?.(false);
-        useEditor.getState().setFirstDeviceReady();
-      }
-    }, 12000);
     loadPacked(url, gl)
       .then((scene) => {
         if (cancelled) return;
-        settled = true;
         setClone(cloneSkeleton(scene));
       })
       .catch(() => {
         if (cancelled) return;
-        settled = true;
-        readyRef.current?.(false);
-        useEditor.getState().setFirstDeviceReady();
+        window.setTimeout(() => {
+          cache.delete(url);
+          bytes.delete(url);
+          loadPacked(url, gl)
+            .then((scene) => {
+              if (!cancelled) setClone(cloneSkeleton(scene));
+            })
+            .catch(() => {});
+        }, 800);
       });
     return () => {
       cancelled = true;
-      window.clearTimeout(timer);
     };
   }, [url, gl, clone]);
 
@@ -215,7 +229,7 @@ export function GltfDevice({
   useFrame(() => {
     if (visible || !clone || !group.current) return;
     if (!fitFloating(group.current, height)) return;
-    if (!texturesReady(clone) && warm.current < 90) {
+    if (!texturesReady(clone) && warm.current < 120) {
       warm.current += 1;
       return;
     }

@@ -21,6 +21,7 @@ export function Viewport() {
   const addShot = useEditor((s) => s.addShot);
   const hintDismissed = useEditor((s) => s.hintDismissed);
   const dismissHint = useEditor((s) => s.dismissHint);
+  const modelReady = useEditor((s) => s.firstDeviceReady);
   const [over, setOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -92,6 +93,25 @@ export function Viewport() {
           e.target.value = "";
         }}
       />
+
+      {!modelReady ? (
+        <div className="pointer-events-none absolute inset-0 grid place-items-center">
+          <div className="flex flex-col items-center gap-2.5 rounded-2xl border border-black/10 bg-white/80 px-5 py-4 text-[13px] text-muted shadow-chrome backdrop-blur-md dark:border-white/10 dark:bg-black/55 dark:text-muted-on-ink">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              className="size-5 animate-spin"
+              aria-hidden="true"
+            >
+              <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+            </svg>
+            <span>Loading model</span>
+          </div>
+        </div>
+      ) : null}
 
       {over ? (
         <div className="pointer-events-none absolute inset-0 grid place-items-center bg-fg/20 text-sm font-medium text-accent-fg">

@@ -64,7 +64,7 @@ type EditorState = {
   setUpgradeOpen: (v: boolean) => void;
   setExportOpen: (v: boolean) => void;
   dismissHint: () => void;
-  setFirstDeviceReady: () => void;
+  setFirstDeviceReady: (v?: boolean) => void;
   consumeCapture: () => boolean;
 
   setFill: (v: string) => void;
@@ -173,7 +173,7 @@ export const useEditor = create<EditorState>()(
       setUpgradeOpen: (v) => set({ upgradeOpen: v }),
       setExportOpen: (v) => set({ exportOpen: v }),
       dismissHint: () => set({ hintDismissed: true }),
-      setFirstDeviceReady: () => set({ firstDeviceReady: true }),
+      setFirstDeviceReady: (v = true) => set({ firstDeviceReady: v }),
       consumeCapture: () => true,
 
       setFill: (v) => set({ fill: v }),
