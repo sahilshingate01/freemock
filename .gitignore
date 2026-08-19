@@ -16,8 +16,6 @@ artifacts
 .grok
 .node_modules.lock
 
-# Ultramock-sourced device packs — not part of this project
-public/models
 public/icon.png
 public/icon-ref.png
 public/og-ref.jpg

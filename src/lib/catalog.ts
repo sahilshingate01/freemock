@@ -140,13 +140,6 @@ export const DEVICES: DeviceDef[] = [
     colors: [DEVICE_COLORS.natural, DEVICE_COLORS.black, DEVICE_COLORS.white],
   },
   {
-    id: "ipad-pro",
-    name: "iPad Pro",
-    kind: "tablet",
-    pixels: [2064, 2752],
-    colors: [DEVICE_COLORS.space, DEVICE_COLORS.white],
-  },
-  {
     id: "macbook-neo",
     name: "MacBook Neo",
     kind: "laptop",
@@ -160,18 +153,23 @@ export const DEVICES: DeviceDef[] = [
     pixels: [3456, 2234],
     colors: [DEVICE_COLORS.space, DEVICE_COLORS.black],
   },
-  {
-    id: "watch-ultra",
-    name: "Watch Ultra",
-    kind: "watch",
-    pixels: [410, 502],
-    colors: [DEVICE_COLORS.orange, DEVICE_COLORS.natural, DEVICE_COLORS.black],
-  },
 ];
 
 export function getDevice(id: DeviceId): DeviceDef {
   return DEVICES.find((d) => d.id === id) ?? DEVICES[0]!;
 }
+
+export const DEVICE_MODELS: Record<
+  DeviceId,
+  { url: string; height: number }
+> = {
+  "iphone-17": { url: "/models/v1/iphone-17-p-sim.glb", height: 1.48 },
+  "iphone-17-pro": { url: "/models/v1/iphone-17-p-sim.glb", height: 1.48 },
+  "macbook-neo": { url: "/models/v1/macbook-neo.glb", height: 1.55 },
+  "macbook-pro": { url: "/models/v1/macbook-neo.glb", height: 1.62 },
+  "ipad-pro": { url: "/models/v1/iphone-17-p-sim.glb", height: 1.48 },
+  "watch-ultra": { url: "/models/v1/iphone-17-p-sim.glb", height: 1.48 },
+};
 
 export const FILL_SWATCHES = [
   { id: "studio", name: "Studio", value: "#e0e0e0" },
@@ -313,9 +311,9 @@ export const TEMPLATES: Template[] = [
   {
     id: "studio-editorial",
     name: "Studio editorial",
-    blurb: "iPad magazine spread",
-    deviceId: "ipad-pro",
-    colorId: "space",
+    blurb: "MacBook magazine spread",
+    deviceId: "macbook-neo",
+    colorId: "silver",
     mediaUrl: SCREENS.studio,
     fill: "#e0e0e0",
     polar: 1.22,
@@ -333,10 +331,10 @@ export const TEMPLATES: Template[] = [
   },
   {
     id: "watch-ultra",
-    name: "Watch Ultra",
-    blurb: "Apple Watch Ultra macro",
-    deviceId: "watch-ultra",
-    colorId: "orange",
+    name: "Night still",
+    blurb: "iPhone 17 Pro close-up",
+    deviceId: "iphone-17-pro",
+    colorId: "black",
     mediaUrl: SCREENS.watch,
     fill: "#14110e",
     polar: 1.24,
