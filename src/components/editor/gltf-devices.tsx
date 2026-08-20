@@ -86,8 +86,7 @@ function isScreenMaterial(mat: THREE.Material): boolean {
 
 function ensureScreenUVs(mesh: THREE.Mesh) {
   const geo = mesh.geometry;
-  const existing = geo.getAttribute("uv") as THREE.BufferAttribute | undefined;
-  if (existing && existing.count > 0) return;
+  if (geo.userData.screenUv === 2) return;
   const pos = geo.getAttribute("position") as THREE.BufferAttribute | undefined;
   if (!pos) return;
   geo.computeBoundingBox();
@@ -95,13 +94,14 @@ function ensureScreenUVs(mesh: THREE.Mesh) {
   if (!bb) return;
   const size = new THREE.Vector3();
   bb.getSize(size);
+  // thinnest axis is the display normal; U = width, V = height
   const dims = [
     { axis: 0, s: size.x },
     { axis: 1, s: size.y },
     { axis: 2, s: size.z },
-  ].sort((a, b) => b.s - a.s);
-  const uAxis = dims[0]!.axis;
-  const vAxis = dims[1]!.axis;
+  ].sort((a, b) => a.s - b.s);
+  const uAxis = dims[1]!.axis;
+  const vAxis = dims[2]!.axis;
   const uMin = bb.min.getComponent(uAxis);
   const vMin = bb.min.getComponent(vAxis);
   const uSize = size.getComponent(uAxis) || 1;
@@ -110,10 +110,11 @@ function ensureScreenUVs(mesh: THREE.Mesh) {
   const p = new THREE.Vector3();
   for (let i = 0; i < pos.count; i++) {
     p.fromBufferAttribute(pos, i);
-    uv[i * 2] = 1 - (p.getComponent(uAxis) - uMin) / uSize;
-    uv[i * 2 + 1] = 1 - (p.getComponent(vAxis) - vMin) / vSize;
+    uv[i * 2] = (p.getComponent(uAxis) - uMin) / uSize;
+    uv[i * 2 + 1] = (p.getComponent(vAxis) - vMin) / vSize;
   }
   geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+  geo.userData.screenUv = 2;
 }
 
 function screenMap(map: THREE.Texture | null) {
