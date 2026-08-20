@@ -2,6 +2,7 @@ import { Canvas } from "@react-three/fiber";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { Scene } from "./Scene";
+import { loadPacked } from "./gltf-devices";
 import { useEditor } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
@@ -76,6 +77,7 @@ export function Viewport() {
           gl.toneMapping = THREE.ACESFilmicToneMapping;
           gl.toneMappingExposure = 1.05;
           gl.outputColorSpace = THREE.SRGBColorSpace;
+          void loadPacked("/models/v1/iphone-17-p-sim.glb", gl);
         }}
       >
         <Suspense fallback={null}>

@@ -11,11 +11,12 @@ let ktx2: KTX2Loader | null = null;
 const cache = new Map<string, Promise<THREE.Group>>();
 const resolved = new Map<string, THREE.Group>();
 const bytes = new Map<string, Promise<ArrayBuffer>>();
+const screenTex = new WeakMap<THREE.Texture, THREE.Texture>();
 
 export function prefetchModel(url: string) {
   let hit = bytes.get(url);
   if (!hit) {
-    hit = fetch(url).then((r) => {
+    hit = fetch(url, { cache: "force-cache" }).then((r) => {
       if (!r.ok) throw new Error(`fetch ${url} ${r.status}`);
       return r.arrayBuffer();
     });
@@ -26,15 +27,23 @@ export function prefetchModel(url: string) {
 
 export function prefetchDefaultModels() {
   prefetchModel("/models/v1/iphone-17-p-sim.glb");
-  prefetchModel("/models/v1/macbook-neo.glb");
-  fetch("/basis/basis_transcoder.js");
-  fetch("/basis/basis_transcoder.wasm");
+  fetch("/basis/basis_transcoder.js", { cache: "force-cache" });
+  fetch("/basis/basis_transcoder.wasm", { cache: "force-cache" });
+  void MeshoptDecoder.ready;
+  const idle =
+    typeof window !== "undefined" && "requestIdleCallback" in window
+      ? window.requestIdleCallback.bind(window)
+      : (fn: () => void) => window.setTimeout(fn, 1200);
+  idle(() => prefetchModel("/models/v1/macbook-neo.glb"));
 }
+
+if (typeof window !== "undefined") prefetchDefaultModels();
 
 function getLoader(gl: THREE.WebGLRenderer) {
   if (!ktx2) {
     ktx2 = new KTX2Loader();
     ktx2.setTranscoderPath("/basis/");
+    ktx2.setWorkerLimit(4);
   }
   ktx2.detectSupport(gl);
   const loader = new GLTFLoader();
@@ -77,10 +86,18 @@ function isScreenMaterial(mat: THREE.Material): boolean {
 
 function screenMap(map: THREE.Texture | null) {
   if (!map) return null;
+  const cached = screenTex.get(map);
+  if (cached) return cached;
   const t = map.clone();
-  t.flipY = false;
   t.colorSpace = THREE.SRGBColorSpace;
+  t.flipY = false;
+  t.wrapS = THREE.RepeatWrapping;
+  t.wrapT = THREE.RepeatWrapping;
+  t.center.set(0.5, 0.5);
+  t.rotation = Math.PI;
+  t.anisotropy = 8;
   t.needsUpdate = true;
+  screenTex.set(map, t);
   return t;
 }
 
@@ -97,10 +114,7 @@ function applyScreen(root: THREE.Object3D, map: THREE.Texture | null) {
       | THREE.MeshStandardMaterial
       | undefined;
     if (!src) return;
-    if (!src.userData.screenBase) {
-      src.userData.screenBase = true;
-      src.userData.isScreen = true;
-    }
+    src.userData.isScreen = true;
     src.color.set("#ffffff");
     src.map = tex;
     src.emissive = new THREE.Color("#ffffff");
@@ -120,12 +134,12 @@ function texturesReady(root: THREE.Object3D) {
   let pending = 0;
   root.traverse((obj) => {
     const mesh = obj as THREE.Mesh;
-    if (!mesh.isMesh) return;
+    if (!mesh.isMesh || mesh.userData.isScreen) return;
     const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     for (const mat of mats) {
       const std = mat as THREE.MeshStandardMaterial;
-      for (const tex of [std.map, std.normalMap, std.roughnessMap, std.metalnessMap]) {
-        if (!tex || mesh.userData.isScreen) continue;
+      for (const tex of [std.map, std.normalMap]) {
+        if (!tex) continue;
         const img = tex.image as { width?: number } | undefined;
         if (!img || !img.width) pending += 1;
       }
@@ -184,10 +198,10 @@ export function GltfDevice({
   onReady?: (ok: boolean) => void;
 }) {
   const gl = useThree((s) => s.gl);
-  const [clone, setClone] = useState<THREE.Object3D | null>(() => {
-    const hit = peekResolved(url);
-    return hit ? cloneSkeleton(hit) : null;
-  });
+  const cached = peekResolved(url);
+  const [clone, setClone] = useState<THREE.Object3D | null>(() =>
+    cached ? cloneSkeleton(cached) : null,
+  );
   const [visible, setVisible] = useState(false);
   const group = useRef<THREE.Group>(null);
   const readyRef = useRef(onReady);
@@ -195,7 +209,9 @@ export function GltfDevice({
   readyRef.current = onReady;
 
   useEffect(() => {
-    useEditor.getState().setFirstDeviceReady(false);
+    if (!peekResolved(url) && !clone) {
+      useEditor.getState().setFirstDeviceReady(false);
+    }
     if (clone) return;
     let cancelled = false;
     loadPacked(url, gl)
@@ -213,7 +229,7 @@ export function GltfDevice({
               if (!cancelled) setClone(cloneSkeleton(scene));
             })
             .catch(() => {});
-        }, 800);
+        }, 400);
       });
     return () => {
       cancelled = true;
@@ -226,13 +242,14 @@ export function GltfDevice({
     if (color) tintBody(clone, color);
   }, [clone, map, color]);
 
-  useFrame(() => {
+  useFrame(({ gl: renderer, scene, camera }) => {
     if (visible || !clone || !group.current) return;
     if (!fitFloating(group.current, height)) return;
-    if (!texturesReady(clone) && warm.current < 120) {
+    if (!texturesReady(clone) && warm.current < 45) {
       warm.current += 1;
       return;
     }
+    renderer.compile(scene, camera);
     setVisible(true);
     readyRef.current?.(true);
     useEditor.getState().setFirstDeviceReady();

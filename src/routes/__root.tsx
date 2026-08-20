@@ -49,6 +49,18 @@ export const Route = createRootRoute({
       { rel: "manifest", href: "/__grok/manifest.webmanifest" },
       { rel: "apple-touch-icon", href: "/__grok/icon-180.png" },
       {
+        rel: "preload",
+        href: "/models/v1/iphone-17-p-sim.glb",
+        as: "fetch",
+        crossOrigin: "anonymous",
+      },
+      {
+        rel: "preload",
+        href: "/basis/basis_transcoder.wasm",
+        as: "fetch",
+        crossOrigin: "anonymous",
+      },
+      {
         rel: "stylesheet",
         href: "https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap",
       },
