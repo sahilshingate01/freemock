@@ -14,7 +14,7 @@ export function useScreenMap(url: string): THREE.Texture | null {
     }
     let cancelled = false;
     const loader = new THREE.TextureLoader();
-    loader.setCrossOrigin("anonymous");
+    if (/^https?:/i.test(url)) loader.setCrossOrigin("anonymous");
     loader.load(
       url,
       (tex) => {

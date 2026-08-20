@@ -84,6 +84,38 @@ function isScreenMaterial(mat: THREE.Material): boolean {
   return (em.r + em.g + em.b) / 3 > 0.85;
 }
 
+function ensureScreenUVs(mesh: THREE.Mesh) {
+  const geo = mesh.geometry;
+  const existing = geo.getAttribute("uv") as THREE.BufferAttribute | undefined;
+  if (existing && existing.count > 0) return;
+  const pos = geo.getAttribute("position") as THREE.BufferAttribute | undefined;
+  if (!pos) return;
+  geo.computeBoundingBox();
+  const bb = geo.boundingBox;
+  if (!bb) return;
+  const size = new THREE.Vector3();
+  bb.getSize(size);
+  const dims = [
+    { axis: 0, s: size.x },
+    { axis: 1, s: size.y },
+    { axis: 2, s: size.z },
+  ].sort((a, b) => b.s - a.s);
+  const uAxis = dims[0]!.axis;
+  const vAxis = dims[1]!.axis;
+  const uMin = bb.min.getComponent(uAxis);
+  const vMin = bb.min.getComponent(vAxis);
+  const uSize = size.getComponent(uAxis) || 1;
+  const vSize = size.getComponent(vAxis) || 1;
+  const uv = new Float32Array(pos.count * 2);
+  const p = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    p.fromBufferAttribute(pos, i);
+    uv[i * 2] = 1 - (p.getComponent(uAxis) - uMin) / uSize;
+    uv[i * 2 + 1] = 1 - (p.getComponent(vAxis) - vMin) / vSize;
+  }
+  geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+}
+
 function screenMap(map: THREE.Texture | null) {
   if (!map) return null;
   const cached = screenTex.get(map);
@@ -91,10 +123,8 @@ function screenMap(map: THREE.Texture | null) {
   const t = map.clone();
   t.colorSpace = THREE.SRGBColorSpace;
   t.flipY = false;
-  t.wrapS = THREE.RepeatWrapping;
-  t.wrapT = THREE.RepeatWrapping;
-  t.center.set(0.5, 0.5);
-  t.rotation = Math.PI;
+  t.wrapS = THREE.ClampToEdgeWrapping;
+  t.wrapT = THREE.ClampToEdgeWrapping;
   t.anisotropy = 8;
   t.needsUpdate = true;
   screenTex.set(map, t);
@@ -110,23 +140,16 @@ function applyScreen(root: THREE.Object3D, map: THREE.Texture | null) {
     const hit = list.some((m) => m && isScreenMaterial(m));
     if (!hit && !mesh.userData.isScreen) return;
     mesh.userData.isScreen = true;
-    const src = (list.find((m) => m && isScreenMaterial(m)) ?? list[0]) as
-      | THREE.MeshStandardMaterial
-      | undefined;
-    if (!src) return;
-    src.userData.isScreen = true;
-    src.color.set("#ffffff");
-    src.map = tex;
-    src.emissive = new THREE.Color("#ffffff");
-    src.emissiveMap = tex;
-    src.emissiveIntensity = tex ? 1 : 0.08;
-    src.metalness = 0;
-    src.roughness = 0.22;
-    src.transparent = false;
-    src.opacity = 1;
-    src.toneMapped = false;
-    src.needsUpdate = true;
-    mesh.material = src;
+    ensureScreenUVs(mesh);
+    const screen = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      map: tex,
+      toneMapped: false,
+      fog: false,
+    });
+    screen.userData.isScreen = true;
+    if (!tex) screen.color.set("#161618");
+    mesh.material = screen;
   });
 }
 
