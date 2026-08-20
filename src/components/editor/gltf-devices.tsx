@@ -84,48 +84,72 @@ function isScreenMaterial(mat: THREE.Material): boolean {
   return (em.r + em.g + em.b) / 3 > 0.85;
 }
 
-function ensureScreenUVs(mesh: THREE.Mesh) {
-  const geo = mesh.geometry;
-  if (geo.userData.screenUv === 2) return;
-  const pos = geo.getAttribute("position") as THREE.BufferAttribute | undefined;
-  if (!pos) return;
-  geo.computeBoundingBox();
-  const bb = geo.boundingBox;
-  if (!bb) return;
-  const size = new THREE.Vector3();
-  bb.getSize(size);
-  // thinnest axis is the display normal; U = width, V = height
-  const dims = [
-    { axis: 0, s: size.x },
-    { axis: 1, s: size.y },
-    { axis: 2, s: size.z },
-  ].sort((a, b) => a.s - b.s);
-  const uAxis = dims[1]!.axis;
-  const vAxis = dims[2]!.axis;
-  const uMin = bb.min.getComponent(uAxis);
-  const vMin = bb.min.getComponent(vAxis);
-  const uSize = size.getComponent(uAxis) || 1;
-  const vSize = size.getComponent(vAxis) || 1;
-  const uv = new Float32Array(pos.count * 2);
-  const p = new THREE.Vector3();
-  for (let i = 0; i < pos.count; i++) {
-    p.fromBufferAttribute(pos, i);
-    uv[i * 2] = (p.getComponent(uAxis) - uMin) / uSize;
-    uv[i * 2 + 1] = (p.getComponent(vAxis) - vMin) / vSize;
-  }
-  geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
-  geo.userData.screenUv = 2;
+function projectScreenUVs(root: THREE.Object3D) {
+  root.updateWorldMatrix(true, true);
+  const world = new THREE.Vector3();
+  root.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.userData.isScreen) return;
+    const geo = mesh.geometry;
+    const pos = geo.getAttribute("position") as THREE.BufferAttribute | undefined;
+    if (!pos) return;
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (let i = 0; i < pos.count; i++) {
+      world.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld);
+      if (world.x < minX) minX = world.x;
+      if (world.x > maxX) maxX = world.x;
+      if (world.y < minY) minY = world.y;
+      if (world.y > maxY) maxY = world.y;
+    }
+    const w = maxX - minX || 1;
+    const h = maxY - minY || 1;
+    const uv = new Float32Array(pos.count * 2);
+    for (let i = 0; i < pos.count; i++) {
+      world.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld);
+      uv[i * 2] = (world.x - minX) / w;
+      uv[i * 2 + 1] = (world.y - minY) / h;
+    }
+    geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+    geo.userData.screenUv = 4;
+  });
 }
 
 function screenMap(map: THREE.Texture | null) {
   if (!map) return null;
   const cached = screenTex.get(map);
   if (cached) return cached;
-  const t = map.clone();
+  const img = map.image as
+    | HTMLImageElement
+    | HTMLCanvasElement
+    | ImageBitmap
+    | undefined;
+  const w = img && "width" in img ? img.width : 0;
+  const h = img && "height" in img ? img.height : 0;
+  let t: THREE.Texture;
+  if (w && h && typeof document !== "undefined") {
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      ctx.drawImage(img as CanvasImageSource, 0, 0);
+      t = new THREE.CanvasTexture(canvas);
+    } else {
+      t = map.clone();
+    }
+  } else {
+    t = map.clone();
+  }
   t.colorSpace = THREE.SRGBColorSpace;
-  t.flipY = false;
+  t.flipY = true;
   t.wrapS = THREE.ClampToEdgeWrapping;
   t.wrapT = THREE.ClampToEdgeWrapping;
+  t.minFilter = THREE.LinearFilter;
+  t.magFilter = THREE.LinearFilter;
+  t.generateMipmaps = false;
   t.anisotropy = 8;
   t.needsUpdate = true;
   screenTex.set(map, t);
@@ -141,7 +165,6 @@ function applyScreen(root: THREE.Object3D, map: THREE.Texture | null) {
     const hit = list.some((m) => m && isScreenMaterial(m));
     if (!hit && !mesh.userData.isScreen) return;
     mesh.userData.isScreen = true;
-    ensureScreenUVs(mesh);
     const screen = new THREE.MeshBasicMaterial({
       color: 0xffffff,
       map: tex,
@@ -269,6 +292,7 @@ export function GltfDevice({
   useFrame(({ gl: renderer, scene, camera }) => {
     if (visible || !clone || !group.current) return;
     if (!fitFloating(group.current, height)) return;
+    projectScreenUVs(group.current);
     if (!texturesReady(clone) && warm.current < 45) {
       warm.current += 1;
       return;
